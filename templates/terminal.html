@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Linux Terminal Emulator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body,
+        html {
+            height: 100%;
+            background: #000;
+            color: #fff;
+            font-family: monospace;
+        }
+
+        #terminal-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .xterm {
+            height: 100%;
+        }
+
+        #error-msg {
+            display: none;
+            padding: 20px;
+            color: red;
+            background: #111;
+            height: 100%;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="terminal-container"></div>
+    <div id="error-msg"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+
+    <script>
+        (function () {
+            // ===== Safety net =====
+            function showError(msg) {
+                const el = document.getElementById('error-msg');
+                el.style.display = 'block';
+                el.textContent = 'FAILED TO START TERMINAL:\n' + msg;
+                console.error(msg);
+            }
+
+            if (typeof Terminal === 'undefined') {
+                showError('xterm.js not loaded. Check internet connection or CDN.');
+                return;
+            }
+
+            // ===== ANSI utility =====
+            function stripAnsi(str) {
+                return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+            }
+
+            // ===== Virtual File System =====
+            class VirtualFS {
+                constructor(root) {
+                    this.root = root || this._defaultRoot();
+                    this.cwd = '/home/user';
+                    this.home = '/home/user';
+                    this.previousCwd = this.cwd;
+                }
+
+                _defaultRoot() {
+                    return {
+                        type: 'dir',
+                        children: {
+                            'bin': {type: 'dir', children: {}},
+                            'etc': {
+                                type: 'dir', children: {
+                                    'hostname': {type: 'file', content: 'linux-emulator\n'},
+                                    'passwd': {type: 'file', content: 'root:x:0:0:root:/root:/bin/bash\nuser:x:1000:1000:User:/home/user:/bin/bash\n'}
+                                }
+                            },
+                            'home': {
+                                type: 'dir', children: {
+                                    'user': {
+                                        type: 'dir', children: {
+                                            '.bashrc': {type: 'file', content: '# bashrc\n'},
+                                            '.profile': {type: 'file', content: '# profile\n'},
+                                            'Documents': {type: 'dir', children: {}},
+                                            'Downloads': {type: 'dir', children: {}},
+                                            'hello.txt': {type: 'file', content: 'Hello, world!\n'}
+                                        }
+                                    }
+                                }
+                            },
+                            'tmp': {type: 'dir', children: {}},
+                            'usr': {
+                                type: 'dir', children: {
+                                    'bin': {type: 'dir', children: {}},
+                                    'lib': {type: 'dir', children: {}}
+                                }
+                            },
+                            'var': {
+                                type: 'dir', children: {
+                                    'log': {type: 'dir', children: {}}
+                                }
+                            },
+                            'root': {type: 'dir', children: {}}
+                        }
+                    };
+                }
+
+                _resolvePath(pathStr) {
+                    if (pathStr.startsWith('~')) pathStr = this.home + pathStr.slice(1);
+                    let parts;
+                    if (pathStr.startsWith('/')) parts = pathStr.split('/').filter(p => p.length);
+                    else {
+                        parts = this.cwd.split('/').filter(p => p.length);
+                        parts = parts.concat(pathStr.split('/').filter(p => p.length));
+                    }
+                    const stack = [];
+                    for (const part of parts) {
+                        if (part === '.' || part === '') continue;
+                        if (part === '..') {if (stack.length) stack.pop();}
+                        else stack.push(part);
+                    }
+                    return '/' + stack.join('/');
+                }
+
+                _getNode(path) {
+                    if (path === '/') return this.root;
+                    const parts = path.split('/').slice(1);
+                    let current = this.root;
+                    for (const part of parts) {
+                        if (current.type !== 'dir' || !current.children[part]) return null;
+                        current = current.children[part];
+                    }
+                    return current;
+                }
+
+                exists(path) {return this._getNode(this._resolvePath(path)) !== null;}
+                isDir(path) {const node = this._getNode(this._resolvePath(path)); return node && node.type === 'dir';}
+                listDir(path) {
+                    const dir = this._getNode(this._resolvePath(path));
+                    if (!dir || dir.type !== 'dir') return null;
+                    return Object.keys(dir.children).map(name => ({name, type: dir.children[name].type}));
+                }
+                readFile(path) {
+                    const node = this._getNode(this._resolvePath(path));
+                    if (!node || node.type !== 'file') return null;
+                    return node.content || '';
+                }
+                writeFile(path, content) {
+                    const absPath = this._resolvePath(path);
+                    const dirPath = absPath.substring(0, absPath.lastIndexOf('/')) || '/';
+                    const fileName = absPath.substring(absPath.lastIndexOf('/') + 1);
+                    const dir = this._getNode(dirPath);
+                    if (!dir || dir.type !== 'dir' || !fileName) return false;
+                    if (dir.children[fileName] && dir.children[fileName].type === 'dir') return false;
+                    dir.children[fileName] = {type: 'file', content};
+                    return true;
+                }
+                mkdir(path) {
+                    const absPath = this._resolvePath(path);
+                    const parts = absPath.split('/').filter(p => p);
+                    let current = this.root;
+                    for (const part of parts) {
+                        if (!current.children) return false;
+                        if (!current.children[part]) current.children[part] = {type: 'dir', children: {}};
+                        else if (current.children[part].type !== 'dir') return false;
+                        current = current.children[part];
+                    }
+                    return true;
+                }
+                touch(path) {return this.writeFile(path, '');}
+                rm(path, recursive = false) {
+                    const absPath = this._resolvePath(path);
+                    if (absPath === '/' || absPath === this.home) return false;
+                    const parentPath = absPath.substring(0, absPath.lastIndexOf('/')) || '/';
+                    const name = absPath.substring(absPath.lastIndexOf('/') + 1);
+                    const parent = this._getNode(parentPath);
+                    if (!parent || !parent.children[name]) return false;
+                    if (parent.children[name].type === 'dir' && !recursive) return false;
+                    delete parent.children[name];
+                    return true;
+                }
+            }
+
+            // ===== Environment =====
+            class Environment {
+                constructor() {
+                    this.vars = {
+                        HOME: '/home/user', USER: 'user', HOSTNAME: 'linux-emulator',
+                        PATH: '/usr/local/bin:/usr/bin:/bin', SHELL: '/bin/bash', PWD: '/home/user'
+                    };
+                }
+                set(key, value) {this.vars[key] = value;}
+                unset(key) {delete this.vars[key];}
+                get(key) {return this.vars[key] || '';}
+                updatePwd(pwd) {this.set('PWD', pwd);}
+            }
+
+            // ===== Command execution =====
+            function parseArgs(str) {
+                const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
+                const args = [];
+                let match;
+                while ((match = regex.exec(str)) !== null) {
+                    args.push(match[1] ?? match[2] ?? match[0]);
+                }
+                return args;
+            }
+
+            function executeCommand(line, fs, env) {
+                const trimmed = line.trim();
+                if (!trimmed) return '';
+
+                let redirFile = null;
+                let commandPart = trimmed;
+                const gt = trimmed.lastIndexOf('>');
+                if (gt !== -1) {
+                    commandPart = trimmed.substring(0, gt).trim();
+                    redirFile = trimmed.substring(gt + 1).trim();
+                }
+
+                const args = parseArgs(commandPart);
+                if (!args.length) return '';
+
+                let output;
+                try {
+                    switch (args[0]) {
+                        case 'ls': output = ls(args.slice(1), fs); break;
+                        case 'cd': output = cd(args.slice(1), fs, env); break;
+                        case 'pwd': output = fs.cwd; break;
+                        case 'mkdir': output = mkdirCmd(args.slice(1), fs); break;
+                        case 'touch': output = touchCmd(args.slice(1), fs); break;
+                        case 'rm': output = rmCmd(args.slice(1), fs); break;
+                        case 'cat': output = catCmd(args.slice(1), fs); break;
+                        case 'echo': output = echoCmd(args.slice(1), env); break;
+                        case 'clear': output = '\x1b[2J\x1b[H'; break;
+                        case 'date': output = new Date().toString(); break;
+                        case 'whoami': output = env.get('USER'); break;
+                        case 'hostname': output = env.get('HOSTNAME'); break;
+                        case 'uptime': output = uptimeCmd(); break;
+                        case 'history': output = historyCmd(); break;
+                        case 'help': output = helpCmd(); break;
+                        case 'export': output = exportCmd(args.slice(1), env); break;
+                        case 'unset': output = unsetCmd(args.slice(1), env); break;
+                        case 'env': output = envCmd(env); break;
+                        case 'grep': output = grepCmd(args.slice(1), fs); break;
+                        case 'sudo': output = 'Nice try. This is a simulated terminal.'; break;
+                        default: output = `\x1b[31m${args[0]}: command not found\x1b[0m`;
+                    }
+                } catch (e) {
+                    output = `\x1b[31m${e.message}\x1b[0m`;
+                }
+
+                if (redirFile) {
+                    const success = fs.writeFile(redirFile, output + '\n');
+                    if (!success) output = `\x1b[31mError writing to '${redirFile}'\x1b[0m`;
+                    else output = '';
+                }
+                return output;
+            }
+
+            // Helper to get directory from args (for ls)
+            function resolveDir(args, fs) {
+                const dir = args.find(a => !a.startsWith('-')) || '.';
+                return fs._resolvePath(dir);
+            }
+
+            // Command implementations (same as before)
+            function ls(args, fs) {
+                const flags = args.filter(a => a.startsWith('-')).join('');
+                const showAll = flags.includes('a'), long = flags.includes('l');
+                const dirPath = resolveDir(args, fs) || fs.cwd;
+                if (!fs.isDir(dirPath)) return `\x1b[31mls: cannot access '${dirPath}': Not a directory\x1b[0m`;
+                const list = fs.listDir(dirPath);
+                if (!list) return '';
+                const filtered = showAll ? list : list.filter(f => !f.name.startsWith('.'));
+                filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+                if (long) {
+                    return filtered.map(f => {
+                        const type = f.type === 'dir' ? 'd' : '-';
+                        const perms = f.type === 'dir' ? 'rwxr-xr-x' : 'rw-r--r--';
+                        const color = f.type === 'dir' ? '\x1b[34m' : '\x1b[0m';
+                        const filePath = (dirPath === '/' ? '' : dirPath) + '/' + f.name;
+                        const size = f.type === 'dir' ? 4096 : (fs.readFile(filePath)?.length || 0);
+                        const dateStr = new Date().toLocaleString('en-US', {month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'});
+                        return `${color}${type}${perms} 1 user user ${String(size).padStart(5)} ${dateStr} ${f.name}\x1b[0m`;
+                    }).join('\n');
+                }
+                return filtered.map(f => {
+                    const color = f.type === 'dir' ? '\x1b[34m' : (f.name.startsWith('.') ? '\x1b[90m' : '\x1b[0m');
+                    return `${color}${f.name}\x1b[0m`;
+                }).join('  ');
+            }
+
+            function cd(args, fs, env) {
+                let target;
+                if (args.length === 0 || args[0] === '~') target = fs.home;
+                else if (args[0] === '-') target = fs.previousCwd || fs.home;
+                else target = fs._resolvePath(args[0]);
+                if (!fs.isDir(target)) return `\x1b[31mcd: ${args[0]}: No such directory\x1b[0m`;
+                fs.previousCwd = fs.cwd;
+                fs.cwd = target;
+                env.updatePwd(target);
+                return '';
+            }
+
+            function mkdirCmd(args, fs) {
+                if (!args.length) return '\x1b[31mmkdir: missing operand\x1b[0m';
+                let out = '';
+                for (const d of args) if (!fs.mkdir(d)) out += `\x1b[31mmkdir: cannot create directory '${d}'\x1b[0m\n`;
+                return out.trimEnd();
+            }
+            function touchCmd(args, fs) {args.forEach(f => fs.touch(f)); return '';}
+            function rmCmd(args, fs) {
+                const recursive = args.includes('-r') || args.includes('-rf');
+                const files = args.filter(a => a !== '-r' && a !== '-rf');
+                if (!files.length) return '\x1b[31mrm: missing operand\x1b[0m';
+                for (const f of files) if (!fs.rm(f, recursive)) return `\x1b[31mrm: cannot remove '${f}'\x1b[0m`;
+                return '';
+            }
+            function catCmd(args, fs) {
+                if (!args.length) return '\x1b[31mcat: missing file operand\x1b[0m';
+                let out = '';
+                for (const f of args) {
+                    const content = fs.readFile(f);
+                    if (content === null) out += `\x1b[31mcat: ${f}: No such file or directory\x1b[0m\n`;
+                    else out += content;
+                }
+                return out;
+            }
+            function echoCmd(args, env) {
+                return args.join(' ').replace(/\$(\w+)/g, (_, v) => env.get(v) || '');
+            }
+            let bootTime = Date.now();
+            function uptimeCmd() {
+                const s = Math.floor((Date.now() - bootTime) / 1000);
+                const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+                return `up ${d} day${d !== 1 ? 's' : ''}, ${h}:${String(m).padStart(2, '0')}, 1 user, load average: 0.00 0.00 0.00`;
+            }
+            let commandHistory = [];
+            function historyCmd() {return commandHistory.map((c, i) => `  ${i + 1}  ${c}`).join('\n');}
+            function helpCmd() {
+                return `Available commands:
+  ls, cd, pwd, mkdir, touch, rm, cat, echo, clear, date
+  whoami, hostname, uptime, history, help, export, unset, env, grep
+  sudo (try it!)
+Use > to redirect output. Tab completion and arrow keys work.`;
+            }
+            function exportCmd(args, env) {
+                const joined = args.join(' '), eq = joined.indexOf('=');
+                if (eq === -1) return '\x1b[31mexport: usage: VAR=value\x1b[0m';
+                env.set(joined.substring(0, eq).trim(), joined.substring(eq + 1).trim());
+                return '';
+            }
+            function unsetCmd(args, env) {args.forEach(a => env.unset(a)); return '';}
+            function envCmd(env) {return Object.entries(env.vars).map(([k, v]) => `${k}=${v}`).join('\n');}
+            function grepCmd(args, fs) {
+                if (args.length < 2) return '\x1b[31mgrep: missing pattern or file\x1b[0m';
+                const pattern = args[0];
+                let out = '';
+                for (const f of args.slice(1)) {
+                    const content = fs.readFile(f);
+                    if (content === null) out += `\x1b[31mgrep: ${f}: No such file or directory\x1b[0m\n`;
+                    else content.split('\n').forEach(line => {if (line.includes(pattern)) out += (args.length > 2 ? f + ':' : '') + line + '\n';});
+                }
+                return out;
+            }
+
+            // ===== Terminal setup =====
+            const term = new Terminal({
+                cursorBlink: true,
+                fontSize: 14,
+                fontFamily: '"Cascadia Code", "Fira Code", monospace',
+                theme: {background: '#0d0d0d', foreground: '#e0e0e0'}
+            });
+            const container = document.getElementById('terminal-container');
+            term.open(container);
+
+            // ---- Custom fit logic (replaces FitAddon) ----
+
+            function fitTerminal() {
+                const dims = term._core._renderService.dimensions;
+                if (!dims) return;
+                const {actualCellWidth, actualCellHeight} = dims;
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                const cols = Math.max(2, Math.floor(width / actualCellWidth));
+                const rows = Math.max(1, Math.floor(height / actualCellHeight));
+                term.resize(cols, rows);
+            }
+            // Initial fit (needs a slight delay for dimensions to be ready)
+            setTimeout(fitTerminal, 0);
+            // Resize observer
+            if (window.ResizeObserver) {
+                new ResizeObserver(() => fitTerminal()).observe(container);
+            } else {
+                window.addEventListener('resize', fitTerminal); // fallback
+            }
+
+            // ===== Persistence =====
+            const fs = new VirtualFS();
+            const env = new Environment();
+
+            function saveState() {
+                localStorage.setItem('terminalState', JSON.stringify({
+                    root: fs.root, cwd: fs.cwd, previousCwd: fs.previousCwd,
+                    envVars: env.vars, history: commandHistory
+                }));
+            }
+            function loadState() {
+                const saved = localStorage.getItem('terminalState');
+                if (saved) {
+                    try {
+                        const s = JSON.parse(saved);
+                        fs.root = s.root; fs.cwd = s.cwd || '/home/user';
+                        fs.previousCwd = s.previousCwd || fs.home;
+                        env.vars = s.envVars || env.vars;
+                        commandHistory = s.history || [];
+                    } catch (e) {console.warn('Failed to load state, starting fresh');}
+                }
+                env.updatePwd(fs.cwd);
+            }
+            loadState();
+
+            // ===== Line editor =====
+            let inputBuffer = '', cursorPos = 0, historyIndex = -1, tempBeforeHistory = '';
+
+            function getPrompt() {
+                let pathDisplay = fs.cwd;
+                if (pathDisplay.startsWith(fs.home)) pathDisplay = '~' + pathDisplay.slice(fs.home.length);
+                return `\x1b[1;32m${env.get('USER')}@${env.get('HOSTNAME')}\x1b[0m:\x1b[1;34m${pathDisplay}\x1b[0m$ `;
+            }
+
+            function redrawInput() {
+                const prompt = getPrompt();
+                const visLen = stripAnsi(prompt).length;
+                term.write('\r' + prompt + inputBuffer + '\x1b[K');
+                term.write(`\x1b[${visLen + cursorPos + 1}G`);
+            }
+
+            function executeLine() {
+                const cmd = inputBuffer;
+                inputBuffer = ''; cursorPos = 0;
+                term.write('\r\n');
+                if (cmd.trim()) {
+                    commandHistory.push(cmd);
+                    if (commandHistory.length > 100) commandHistory.shift();
+                    historyIndex = -1;
+                    const output = executeCommand(cmd, fs, env);
+                    if (output) term.write(output.replace(/\n/g, '\r\n') + '\r\n');
+                    saveState();
+                }
+                redrawInput();
+            }
+
+            // Key handling
+            term.onKey(({key, domEvent}) => {
+                const ctrl = domEvent.ctrlKey, alt = domEvent.altKey;
+                const printable = !ctrl && !alt && key.length === 1;
+                const prevent = () => domEvent.preventDefault();
+
+                if (ctrl && key === 'c') {prevent(); term.write('^C\r\n'); inputBuffer = ''; cursorPos = 0; redrawInput(); return;}
+                if (ctrl && key === 'l') {prevent(); term.write('\x1b[2J\x1b[H'); redrawInput(); return;}
+                if (key === 'Enter') {prevent(); executeLine(); return;}
+                if (key === 'Backspace') {
+                    prevent();
+                    if (cursorPos > 0) {inputBuffer = inputBuffer.slice(0, cursorPos - 1) + inputBuffer.slice(cursorPos); cursorPos--; redrawInput();}
+                    return;
+                }
+                if (key === 'Delete') {
+                    prevent();
+                    if (cursorPos < inputBuffer.length) {inputBuffer = inputBuffer.slice(0, cursorPos) + inputBuffer.slice(cursorPos + 1); redrawInput();}
+                    return;
+                }
+                if (key === 'ArrowLeft') {prevent(); if (cursorPos > 0) {cursorPos--; redrawInput();} return;}
+                if (key === 'ArrowRight') {prevent(); if (cursorPos < inputBuffer.length) {cursorPos++; redrawInput();} return;}
+                if (key === 'Home') {prevent(); cursorPos = 0; redrawInput(); return;}
+                if (key === 'End') {prevent(); cursorPos = inputBuffer.length; redrawInput(); return;}
+                if (key === 'ArrowUp') {
+                    prevent();
+                    if (!commandHistory.length) return;
+                    if (historyIndex === -1) {tempBeforeHistory = inputBuffer; historyIndex = commandHistory.length - 1;}
+                    else if (historyIndex > 0) historyIndex--;
+                    inputBuffer = commandHistory[historyIndex]; cursorPos = inputBuffer.length; redrawInput();
+                    return;
+                }
+                if (key === 'ArrowDown') {
+                    prevent();
+                    if (historyIndex === -1) return;
+                    if (historyIndex < commandHistory.length - 1) {historyIndex++; inputBuffer = commandHistory[historyIndex];}
+                    else {historyIndex = -1; inputBuffer = tempBeforeHistory;}
+                    cursorPos = inputBuffer.length; redrawInput();
+                    return;
+                }
+                if (key === 'Tab') {
+                    prevent();
+                    const beforeCursor = inputBuffer.slice(0, cursorPos);
+                    const match = beforeCursor.match(/(\S+)$/);
+                    const partial = match ? match[1] : '';
+                    const dirPart = partial.includes('/') ? partial.substring(0, partial.lastIndexOf('/')) || '/' : '.';
+                    const base = partial.substring(partial.lastIndexOf('/') + 1);
+                    const resolved = fs._resolvePath(dirPart);
+                    const list = fs.listDir(resolved);
+                    if (!list) return;
+                    const matches = list.filter(f => f.name.startsWith(base)).map(f => f.name);
+                    if (!matches.length) return;
+                    if (matches.length === 1) {
+                        const completion = matches[0].slice(base.length);
+                        const isDir = list.find(f => f.name === matches[0])?.type === 'dir';
+                        const suffix = isDir ? '/' : '';
+                        inputBuffer = inputBuffer.slice(0, cursorPos) + completion + suffix + inputBuffer.slice(cursorPos);
+                        cursorPos += completion.length + suffix.length;
+                        redrawInput();
+                    } else {
+                        term.write('\r\n' + matches.join('  ') + '\r\n');
+                        redrawInput();
+                    }
+                    return;
+                }
+                if (printable) {
+                    prevent();
+                    inputBuffer = inputBuffer.slice(0, cursorPos) + key + inputBuffer.slice(cursorPos);
+                    cursorPos++;
+                    redrawInput();
+                    return;
+                }
+                prevent();
+            });
+
+            // Paste support
+            term.textarea.addEventListener('paste', e => {
+                e.preventDefault();
+                const text = (e.clipboardData || window.clipboardData).getData('text');
+                if (!text) return;
+                inputBuffer = inputBuffer.slice(0, cursorPos) + text.replace(/[\r\n]/g, '') + inputBuffer.slice(cursorPos);
+                cursorPos += text.length;
+                redrawInput();
+            });
+
+            // Welcome message and start
+            term.writeln('\x1b[1;36mWelcome to Linux Terminal Emulator\x1b[0m');
+            term.writeln("\x1b[90mType 'help' for available commands.\x1b[0m");
+            redrawInput();
+
+            console.log('Terminal initialized successfully.');
+        })();
+    </script>
+</body>
+
+</html>

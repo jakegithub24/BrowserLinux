@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux Shell Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1000px;
+            height: 90vh;
+            display: flex;
+            gap: 10px;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #16213e;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .output-area {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.5;
+            background: #0f0f1a;
+            color: #c5c8c6;
+        }
+
+        .output-area .prompt {
+            color: #81a1c1;
+        }
+
+        .output-area .cmd {
+            color: #ebcb8b;
+        }
+
+        .output-area .error {
+            color: #bf616a;
+        }
+
+        .input-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            background: #16213e;
+            border-top: 1px solid #3b4252;
+        }
+
+        .input-row span {
+            color: #a3be8c;
+            margin-right: 8px;
+            font-weight: bold;
+            user-select: none;
+        }
+
+        .input-row input {
+            flex: 1;
+            background: #0f0f1a;
+            border: 1px solid #3b4252;
+            color: #e5e9f0;
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .input-row input:focus {
+            border-color: #81a1c1;
+        }
+
+        .input-row button {
+            margin-left: 8px;
+            background: #5e81ac;
+            border: none;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .input-row button:hover {
+            background: #81a1c1;
+        }
+
+        .sidebar {
+            width: 220px;
+            background: #16213e;
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar h3 {
+            color: #88c0d0;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .sidebar .history-list {
+            flex: 1;
+        }
+
+        .sidebar .history-item {
+            color: #d8dee9;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar .history-item:hover {
+            background: #2e3440;
+            color: #88c0d0;
+        }
+
+        .sidebar button.clear-btn {
+            margin-top: 10px;
+            background: #bf616a;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .sidebar button.clear-btn:hover {
+            background: #d08770;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="main">
+            <div class="output-area" id="output"></div>
+            <div class="input-row">
+                <span id="promptSpan">user@linux-emulator:~$</span>
+                <input type="text" id="cmdInput" placeholder="Type command..." autofocus>
+                <button id="submitBtn">Enter</button>
+            </div>
+        </div>
+        <div class="sidebar">
+            <h3>History</h3>
+            <div class="history-list" id="historyList"></div>
+            <button class="clear-btn" id="clearHistoryBtn">Clear History</button>
+        </div>
+    </div>
+
+    <script>
+        // ===================== VIRTUAL FILE SYSTEM =====================
+        class VirtualFS {
+            constructor(root = null) {
+                this.root = root || this._defaultRoot();
+                this.cwd = '/home/user';
+                this.home = '/home/user';
+                this.previousCwd = this.cwd;
+            }
+
+            _defaultRoot() {
+                return {
+                    type: 'dir',
+                    children: {
+                        'bin': {type: 'dir', children: {}},
+                        'etc': {
+                            type: 'dir', children: {
+                                'hostname': {type: 'file', content: 'linux-emulator\n'},
+                                'passwd': {type: 'file', content: 'root:x:0:0:root:/root:/bin/bash\nuser:x:1000:1000:User:/home/user:/bin/bash\n'}
+                            }
+                        },
+                        'home': {
+                            type: 'dir', children: {
+                                'user': {
+                                    type: 'dir', children: {
+                                        '.bashrc': {type: 'file', content: '# bashrc\n'},
+                                        '.profile': {type: 'file', content: '# profile\n'},
+                                        'Documents': {type: 'dir', children: {}},
+                                        'Downloads': {type: 'dir', children: {}},
+                                        'hello.txt': {type: 'file', content: 'Hello, world!\n'}
+                                    }
+                                }
+                            }
+                        },
+                        'tmp': {type: 'dir', children: {}},
+                        'usr': {
+                            type: 'dir', children: {
+                                'bin': {type: 'dir', children: {}},
+                                'lib': {type: 'dir', children: {}}
+                            }
+                        },
+                        'var': {
+                            type: 'dir', children: {
+                                'log': {type: 'dir', children: {}}
+                            }
+                        },
+                        'root': {type: 'dir', children: {}}
+                    }
+                };
+            }
+
+            _resolvePath(pathStr) {
+                if (pathStr.startsWith('~')) pathStr = this.home + pathStr.slice(1);
+                let parts;
+                if (pathStr.startsWith('/')) parts = pathStr.split('/').filter(p => p.length);
+                else {
+                    parts = this.cwd.split('/').filter(p => p.length);
+                    parts = parts.concat(pathStr.split('/').filter(p => p.length));
+                }
+                const stack = [];
+                for (const part of parts) {
+                    if (part === '.' || part === '') continue;
+                    if (part === '..') {if (stack.length) stack.pop();}
+                    else stack.push(part);
+                }
+                return '/' + stack.join('/');
+            }
+
+            _getNode(path) {
+                if (path === '/') return this.root;
+                const parts = path.split('/').slice(1);
+                let current = this.root;
+                for (const part of parts) {
+                    if (current.type !== 'dir' || !current.children[part]) return null;
+                    current = current.children[part];
+                }
+                return current;
+            }
+
+            exists(path) {return this._getNode(this._resolvePath(path)) !== null;}
+            isDir(path) {const node = this._getNode(this._resolvePath(path)); return node && node.type === 'dir';}
+            listDir(path) {
+                const dir = this._getNode(this._resolvePath(path));
+                if (!dir || dir.type !== 'dir') return null;
+                return Object.keys(dir.children).map(name => ({name, type: dir.children[name].type}));
+            }
+            readFile(path) {
+                const node = this._getNode(this._resolvePath(path));
+                if (!node || node.type !== 'file') return null;
+                return node.content || '';
+            }
+            writeFile(path, content) {
+                const absPath = this._resolvePath(path);
+                const dirPath = absPath.substring(0, absPath.lastIndexOf('/')) || '/';
+                const fileName = absPath.substring(absPath.lastIndexOf('/') + 1);
+                const dir = this._getNode(dirPath);
+                if (!dir || dir.type !== 'dir' || !fileName) return false;
+                if (dir.children[fileName] && dir.children[fileName].type === 'dir') return false;
+                dir.children[fileName] = {type: 'file', content};
+                return true;
+            }
+            mkdir(path) {
+                const absPath = this._resolvePath(path);
+                const parts = absPath.split('/').filter(p => p);
+                let current = this.root;
+                for (const part of parts) {
+                    if (!current.children) return false;
+                    if (!current.children[part]) current.children[part] = {type: 'dir', children: {}};
+                    else if (current.children[part].type !== 'dir') return false;
+                    current = current.children[part];
+                }
+                return true;
+            }
+            touch(path) {return this.writeFile(path, '');}
+            rm(path, recursive = false) {
+                const absPath = this._resolvePath(path);
+                if (absPath === '/' || absPath === this.home) return false;
+                const parentPath = absPath.substring(0, absPath.lastIndexOf('/')) || '/';
+                const name = absPath.substring(absPath.lastIndexOf('/') + 1);
+                const parent = this._getNode(parentPath);
+                if (!parent || !parent.children[name]) return false;
+                if (parent.children[name].type === 'dir' && !recursive) return false;
+                delete parent.children[name];
+                return true;
+            }
+        }
+
+        // ===================== ENVIRONMENT =====================
+        class Environment {
+            constructor() {
+                this.vars = {
+                    HOME: '/home/user', USER: 'user', HOSTNAME: 'linux-emulator',
+                    PATH: '/usr/local/bin:/usr/bin:/bin', SHELL: '/bin/bash', PWD: '/home/user'
+                };
+            }
+            set(key, value) {this.vars[key] = value;}
+            unset(key) {delete this.vars[key];}
+            get(key) {return this.vars[key] || '';}
+            updatePwd(pwd) {this.set('PWD', pwd);}
+        }
+
+        // ===================== COMMAND EXECUTION =====================
+        function parseArgs(str) {
+            const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
+            const args = [];
+            let match;
+            while ((match = regex.exec(str)) !== null) {
+                args.push(match[1] ?? match[2] ?? match[0]);
+            }
+            return args;
+        }
+
+        let bootTime = Date.now();
+        let commandHistory = [];
+
+        function executeCommand(line, fs, env) {
+            const trimmed = line.trim();
+            if (!trimmed) return '';
+
+            // handle output redirection
+            let redirFile = null;
+            let commandPart = trimmed;
+            const gt = trimmed.lastIndexOf('>');
+            if (gt !== -1) {
+                commandPart = trimmed.substring(0, gt).trim();
+                redirFile = trimmed.substring(gt + 1).trim();
+            }
+
+            const args = parseArgs(commandPart);
+            if (!args.length) return '';
+
+            let output;
+            try {
+                switch (args[0]) {
+                    case 'ls': output = ls(args.slice(1), fs); break;
+                    case 'cd': output = cd(args.slice(1), fs, env); break;
+                    case 'pwd': output = fs.cwd; break;
+                    case 'mkdir': output = mkdirCmd(args.slice(1), fs); break;
+                    case 'touch': output = touchCmd(args.slice(1), fs); break;
+                    case 'rm': output = rmCmd(args.slice(1), fs); break;
+                    case 'cat': output = catCmd(args.slice(1), fs); break;
+                    case 'echo': output = echoCmd(args.slice(1), env); break;
+                    case 'clear': output = '__CLEAR__'; break;
+                    case 'date': output = new Date().toString(); break;
+                    case 'whoami': output = env.get('USER'); break;
+                    case 'hostname': output = env.get('HOSTNAME'); break;
+                    case 'uptime': output = uptimeCmd(); break;
+                    case 'history': output = historyCmd(); break;
+                    case 'help': output = helpCmd(); break;
+                    case 'export': output = exportCmd(args.slice(1), env); break;
+                    case 'unset': output = unsetCmd(args.slice(1), env); break;
+                    case 'env': output = envCmd(env); break;
+                    case 'grep': output = grepCmd(args.slice(1), fs); break;
+                    case 'sudo': output = 'Nice try.'; break;
+                    default: output = `\x1b[31m${args[0]}: command not found\x1b[0m`;
+                }
+            } catch (e) {
+                output = `\x1b[31m${e.message}\x1b[0m`;
+            }
+
+            if (redirFile && output !== '__CLEAR__') {
+                const success = fs.writeFile(redirFile, output + '\n');
+                if (!success) output = `\x1b[31mError writing to '${redirFile}'\x1b[0m`;
+                else output = '';
+            }
+
+            return output;
+        }
+
+        // Command implementations (simplified for plain text, no ANSI)
+        function resolveDir(args, fs) {
+            const dir = args.find(a => !a.startsWith('-')) || '.';
+            return fs._resolvePath(dir);
+        }
+
+        function ls(args, fs) {
+            const flags = args.filter(a => a.startsWith('-')).join('');
+            const showAll = flags.includes('a'), long = flags.includes('l');
+            const dirPath = resolveDir(args, fs) || fs.cwd;
+            if (!fs.isDir(dirPath)) return `ls: cannot access '${dirPath}': Not a directory`;
+            const list = fs.listDir(dirPath);
+            if (!list) return '';
+            const filtered = showAll ? list : list.filter(f => !f.name.startsWith('.'));
+            filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+            if (long) {
+                return filtered.map(f => {
+                    const type = f.type === 'dir' ? 'd' : '-';
+                    const perms = f.type === 'dir' ? 'rwxr-xr-x' : 'rw-r--r--';
+                    const filePath = (dirPath === '/' ? '' : dirPath) + '/' + f.name;
+                    const size = f.type === 'dir' ? 4096 : (fs.readFile(filePath)?.length || 0);
+                    const dateStr = new Date().toLocaleString('en-US', {month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'});
+                    return `${type}${perms} 1 user user ${String(size).padStart(5)} ${dateStr} ${f.name}${f.type === 'dir' ? '/' : ''}`;
+                }).join('\n');
+            }
+            return filtered.map(f => f.name + (f.type === 'dir' ? '/' : '')).join('  ');
+        }
+
+        function cd(args, fs, env) {
+            let target;
+            if (args.length === 0 || args[0] === '~') target = fs.home;
+            else if (args[0] === '-') target = fs.previousCwd || fs.home;
+            else target = fs._resolvePath(args[0]);
+            if (!fs.isDir(target)) return `cd: ${args[0]}: No such directory`;
+            fs.previousCwd = fs.cwd;
+            fs.cwd = target;
+            env.updatePwd(target);
+            return '';
+        }
+
+        function mkdirCmd(args, fs) {
+            if (!args.length) return 'mkdir: missing operand';
+            let out = '';
+            for (const d of args) if (!fs.mkdir(d)) out += `mkdir: cannot create directory '${d}'\n`;
+            return out.trimEnd();
+        }
+        function touchCmd(args, fs) {
+            if (!args.length) return 'touch: missing file operand';
+            args.forEach(f => fs.touch(f));
+            return '';
+        }
+        function rmCmd(args, fs) {
+            const recursive = args.includes('-r') || args.includes('-rf');
+            const files = args.filter(a => a !== '-r' && a !== '-rf');
+            if (!files.length) return 'rm: missing operand';
+            for (const f of files) if (!fs.rm(f, recursive)) return `rm: cannot remove '${f}'`;
+            return '';
+        }
+        function catCmd(args, fs) {
+            if (!args.length) return 'cat: missing file operand';
+            let out = '';
+            for (const f of args) {
+                const content = fs.readFile(f);
+                if (content === null) out += `cat: ${f}: No such file or directory\n`;
+                else out += content;
+            }
+            return out;
+        }
+        function echoCmd(args, env) {
+            return args.join(' ').replace(/\$(\w+)/g, (_, v) => env.get(v) || '');
+        }
+        function uptimeCmd() {
+            const s = Math.floor((Date.now() - bootTime) / 1000);
+            const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+            return `up ${d} day${d !== 1 ? 's' : ''}, ${h}:${String(m).padStart(2, '0')}, 1 user, load average: 0.00 0.00 0.00`;
+        }
+        function historyCmd() {
+            return commandHistory.map((c, i) => `  ${i + 1}  ${c}`).join('\n');
+        }
+        function helpCmd() {
+            return `Available commands: ls, cd, pwd, mkdir, touch, rm, cat, echo, clear, date,
+whoami, hostname, uptime, history, help, export, unset, env, grep, sudo
+Use > to redirect output.`;
+        }
+        function exportCmd(args, env) {
+            const joined = args.join(' '), eq = joined.indexOf('=');
+            if (eq === -1) return 'export: usage: VAR=value';
+            env.set(joined.substring(0, eq).trim(), joined.substring(eq + 1).trim().replace(/^["']|["']$/g, ''));
+            return '';
+        }
+        function unsetCmd(args, env) {args.forEach(a => env.unset(a)); return '';}
+        function envCmd(env) {return Object.entries(env.vars).map(([k, v]) => `${k}=${v}`).join('\n');}
+        function grepCmd(args, fs) {
+            if (args.length < 2) return 'grep: missing pattern or file';
+            const pattern = args[0];
+            let out = '';
+            for (const f of args.slice(1)) {
+                const content = fs.readFile(f);
+                if (content === null) out += `grep: ${f}: No such file or directory\n`;
+                else content.split('\n').forEach(line => {if (line.includes(pattern)) out += (args.length > 2 ? f + ':' : '') + line + '\n';});
+            }
+            return out;
+        }
+
+        // ===================== UI LOGIC =====================
+        const fs = new VirtualFS();
+        const env = new Environment();
+
+        const outputDiv = document.getElementById('output');
+        const cmdInput = document.getElementById('cmdInput');
+        const promptSpan = document.getElementById('promptSpan');
+        const historyListDiv = document.getElementById('historyList');
+        const submitBtn = document.getElementById('submitBtn');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+        // Load state from localStorage
+        function loadState() {
+            const saved = localStorage.getItem('terminalState');
+            if (saved) {
+                try {
+                    const s = JSON.parse(saved);
+                    fs.root = s.root; fs.cwd = s.cwd || '/home/user';
+                    fs.previousCwd = s.previousCwd || fs.home;
+                    env.vars = s.envVars || env.vars;
+                    commandHistory = s.history || [];
+                } catch (e) { }
+            }
+            env.updatePwd(fs.cwd);
+        }
+
+        function saveState() {
+            localStorage.setItem('terminalState', JSON.stringify({
+                root: fs.root, cwd: fs.cwd, previousCwd: fs.previousCwd,
+                envVars: env.vars, history: commandHistory
+            }));
+        }
+
+        function updatePrompt() {
+            let pathDisplay = fs.cwd;
+            if (pathDisplay.startsWith(fs.home)) {
+                pathDisplay = '~' + pathDisplay.slice(fs.home.length);
+            }
+            promptSpan.textContent = `${env.get('USER')}@${env.get('HOSTNAME')}:${pathDisplay}$`;
+        }
+
+        function appendOutput(text, isCommand = false) {
+            const div = document.createElement('div');
+            if (text === '__CLEAR__') {
+                outputDiv.innerHTML = '';
+                return;
+            }
+            if (isCommand) {
+                div.innerHTML = `<span class="prompt">${promptSpan.textContent}</span> <span class="cmd">${escapeHtml(text)}</span>`;
+            } else {
+                // Convert ANSI colors? We'll just show plain text for now (removed ANSI)
+                div.textContent = text;
+                if (text.trim().startsWith('Error') || text.includes(': command not found')) {
+                    div.className = 'error';
+                }
+            }
+            outputDiv.appendChild(div);
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function updateHistorySidebar() {
+            historyListDiv.innerHTML = '';
+            // show last 50 commands
+            const recent = commandHistory.slice(-50).reverse();
+            for (const cmd of recent) {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.textContent = cmd;
+                item.addEventListener('click', () => {
+                    cmdInput.value = cmd;
+                    cmdInput.focus();
+                });
+                historyListDiv.appendChild(item);
+            }
+        }
+
+        function executeAndShow(cmd) {
+            if (cmd.trim()) {
+                commandHistory.push(cmd);
+                if (commandHistory.length > 200) commandHistory.shift();
+            }
+            appendOutput(cmd, true);
+            const result = executeCommand(cmd, fs, env);
+            if (result) {
+                appendOutput(result);
+            }
+            saveState();
+            updatePrompt();
+            updateHistorySidebar();
+        }
+
+        // Event listeners
+        submitBtn.addEventListener('click', () => {
+            const cmd = cmdInput.value.trim();
+            if (cmd) {
+                executeAndShow(cmd);
+                cmdInput.value = '';
+                cmdInput.focus();
+            }
+        });
+
+        cmdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitBtn.click();
+            }
+        });
+
+        clearHistoryBtn.addEventListener('click', () => {
+            if (confirm('Clear all command history?')) {
+                commandHistory = [];
+                saveState();
+                updateHistorySidebar();
+            }
+        });
+
+        // Initial setup
+        loadState();
+        updatePrompt();
+        updateHistorySidebar();
+
+        // Welcome message
+        appendOutput('Welcome to Linux Terminal Simulator');
+        appendOutput("Type 'help' for available commands.");
+    </script>
+</body>
+
+</html>
