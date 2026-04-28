@@ -1,1 +1,5 @@
 flask
+flask-sqlalchemy
+flask-session
+argon2-cffi
+python-dotenv

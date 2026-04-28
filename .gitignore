@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+
+# Virtual environments
+myvenv/
+venv/
+env/
+
+# SQLite database
+users.db
+*.sqlite3
+
+# Flask session files
+flask_session/
+
+# Environment variables
+.env
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Node/npm (if ever used)
+node_modules/
+
+# Coverage
+htmlcov/
+.coverage
+
+# Misc
+*.swp
+*.bak
+*.tmp

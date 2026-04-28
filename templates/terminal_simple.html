@@ -30,6 +30,47 @@
             gap: 10px;
         }
 
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: #0f0f1a;
+            border-bottom: 1px solid #3b4252;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            justify-content: space-between;
+            z-index: 100;
+        }
+
+        .top-bar .user-info {
+            color: #88c0d0;
+            font-size: 12px;
+        }
+
+        .top-bar .user-info .mode {
+            color: #a3be8c;
+            margin-left: 10px;
+        }
+
+        .top-bar button {
+            background: #5e81ac;
+            border: none;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+            margin-left: 10px;
+        }
+
+        .top-bar button:hover {
+            background: #81a1c1;
+        }
+
         .main {
             flex: 1;
             display: flex;
@@ -38,6 +79,7 @@
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            margin-top: 50px;
         }
 
         .output-area {
@@ -118,6 +160,7 @@
             display: flex;
             flex-direction: column;
             overflow-y: auto;
+            margin-top: 50px;
         }
 
         .sidebar h3 {
@@ -160,10 +203,209 @@
         .sidebar button.clear-btn:hover {
             background: #d08770;
         }
-    </style>
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
+        }
+
+        .modal-content h2 {
+            color: #88c0d0;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .modal-content .form-group {
+            margin-bottom: 15px;
+        }
+
+        .modal-content label {
+            color: #d8dee9;
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 8px 12px;
+            background: #0f0f1a;
+            border: 1px solid #3b4252;
+            color: #e5e9f0;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .modal-content input:focus {
+            outline: none;
+            border-color: #81a1c1;
+        }
+
+        .modal-content button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 15px;
+            background: #5e81ac;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .modal-content button:hover {
+            background: #81a1c1;
+        }
+
+        .modal-content .error-msg {
+            color: #bf616a;
+            font-size: 12px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .modal-content .toggle-link {
+            color: #81a1c1;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 12px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .modal-content .toggle-link:hover {
+            color: #88c0d0;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .auth-buttons button {
+            flex: 1;
+            padding: 8px;
+            font-size: 12px;
+        }
 </head>
 
 <body>
+    <!-- Top navigation bar -->
+    <div class="top-bar">
+        <div class="user-info">
+            <span id="userDisplay">Guest</span>
+            <span class="mode" id="modeDisplay">(guest mode)</span>
+        </div>
+        <div>
+            <button id="authBtn" onclick="showAuthModal()">Login / Register</button>
+            <button id="accountBtn" style="display:none;" onclick="showAccountModal()">Account</button>
+            <button id="logoutBtn" style="display:none;" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <h2 id="authTitle">Login</h2>
+            <div id="loginForm">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="loginUsername" placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password">
+                </div>
+                <div class="error-msg" id="authError"></div>
+                <button onclick="handleLogin()">Login</button>
+                <div class="toggle-link" onclick="switchToRegister()">Don't have an account? Register</div>
+            </div>
+
+            <div id="registerForm" style="display:none;">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="regUsername" placeholder="Enter username (3+ chars)">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="regPassword" placeholder="Enter password (6+ chars)">
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="regConfirm" placeholder="Confirm password">
+                </div>
+                <div class="error-msg" id="authError2"></div>
+                <button onclick="handleRegister()">Register</button>
+                <div class="toggle-link" onclick="switchToLogin()">Already have an account? Login</div>
+            </div>
+
+            <div class="auth-buttons" style="margin-top:20px;">
+                <button onclick="guestLogin()" style="background: #a3be8c;">Continue as Guest</button>
+                <button onclick="closeAuthModal()" style="background: #bf616a;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Modal -->
+    <div id="accountModal" class="modal">
+        <div class="modal-content">
+            <h2>Account Settings</h2>
+            <div id="changePasswordForm">
+                <h3 style="color: #88c0d0; margin-bottom: 15px; font-size: 16px;">Change Password</h3>
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" id="oldPassword" placeholder="Enter current password">
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="newPassword" placeholder="Enter new password (6+ chars)">
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <input type="password" id="confirmPassword" placeholder="Confirm new password">
+                </div>
+                <div class="error-msg" id="passError"></div>
+                <button onclick="handleChangePassword()">Change Password</button>
+            </div>
+
+            <div id="deleteAccountForm" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #3b4252;">
+                <h3 style="color: #bf616a; margin-bottom: 15px; font-size: 16px;">Danger Zone</h3>
+                <div class="form-group">
+                    <label>Confirm Password to Delete Account</label>
+                    <input type="password" id="deletePassword" placeholder="Enter password">
+                </div>
+                <div class="error-msg" id="deleteError"></div>
+                <button onclick="handleDeleteAccount()" style="background: #bf616a;">Delete Account</button>
+            </div>
+
+            <button onclick="closeAccountModal()" style="width: 100%; margin-top: 20px; background: #5e81ac;">Close</button>
+        </div>
+    </div>
+
     <div class="container">
         <div class="main">
             <div class="output-area" id="output"></div>
@@ -181,8 +423,795 @@
     </div>
 
     <script>
+        // ===================== GLOBAL STATE =====================
+        let currentUser = null;
+        let currentMode = 'guest';
+        let fs = new VirtualFS();
+        let env = new Environment();
+        let bootTime = Date.now();
+        let commandHistory = [];
+
+        // ===================== AUTHENTICATION FUNCTIONS =====================
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/api/auth/status');
+                const data = await response.json();
+                if (data.authenticated) {
+                    currentUser = data.username;
+                    currentMode = 'registered';
+                    updateAuthUI();
+                    await loadUserSession();
+                } else {
+                    currentMode = 'guest';
+                    updateAuthUI();
+                }
+            } catch (e) {
+                console.error('Auth check failed:', e);
+            }
+        }
+
+        async function handleLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('authError');
+            errorDiv.textContent = '';
+
+            if (!username || !password) {
+                errorDiv.textContent = 'Please fill all fields';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Login failed';
+                    return;
+                }
+
+                currentUser = data.username;
+                currentMode = 'registered';
+                updateAuthUI();
+                await loadUserSession();
+                closeAuthModal();
+                appendOutput(`Welcome back, ${currentUser}!`);
+            } catch (e) {
+                errorDiv.textContent = 'Network error: ' + e.message;
+            }
+        }
+
+        async function handleRegister() {
+            const username = document.getElementById('regUsername').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const confirm = document.getElementById('regConfirm').value;
+            const errorDiv = document.getElementById('authError2');
+            errorDiv.textContent = '';
+
+            if (!username || !password || !confirm) {
+                errorDiv.textContent = 'Please fill all fields';
+                return;
+            }
+            if (password !== confirm) {
+                errorDiv.textContent = 'Passwords do not match';
+                return;
+            }
+            if (username.length < 3) {
+                errorDiv.textContent = 'Username must be at least 3 characters';
+                return;
+            }
+            if (password.length < 6) {
+                errorDiv.textContent = 'Password must be at least 6 characters';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Registration failed';
+                    return;
+                }
+
+                errorDiv.textContent = '';
+                errorDiv.style.color = '#a3be8c';
+                errorDiv.textContent = 'Registration successful! Logging in...';
+                setTimeout(() => {
+                    document.getElementById('loginUsername').value = username;
+                    document.getElementById('loginPassword').value = password;
+                    handleLogin();
+                }, 1500);
+            } catch (e) {
+                errorDiv.textContent = 'Network error: ' + e.message;
+            }
+        }
+
+        async function guestLogin() {
+            try {
+                const response = await fetch('/api/auth/login-guest', { method: 'POST' });
+                if (response.ok) {
+                    currentMode = 'guest';
+                    currentUser = null;
+                    commandHistory = [];
+                    fs = new VirtualFS();
+                    env = new Environment();
+                    updateAuthUI();
+                    closeAuthModal();
+                    outputDiv.innerHTML = '';
+                    appendOutput('Welcome to Linux Terminal Simulator (Guest Mode)');
+                    appendOutput('Your session will not be saved. Type "help" for commands.');
+                    updatePrompt();
+                    updateHistorySidebar();
+                }
+            } catch (e) {
+                console.error('Guest login failed:', e);
+            }
+        }
+
+        async function logout() {
+            try {
+                await saveUserSession();
+                const response = await fetch('/api/auth/logout', { method: 'POST' });
+                if (response.ok) {
+                    currentUser = null;
+                    currentMode = 'guest';
+                    commandHistory = [];
+                    fs = new VirtualFS();
+                    env = new Environment();
+                    updateAuthUI();
+                    outputDiv.innerHTML = '';
+                    appendOutput('Logged out. Welcome to Guest Mode.');
+                    appendOutput('Your previous session has been saved.');
+                    updatePrompt();
+                    updateHistorySidebar();
+                }
+            } catch (e) {
+                console.error('Logout failed:', e);
+            }
+        }
+
+        async function handleChangePassword() {
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const errorDiv = document.getElementById('passError');
+            errorDiv.textContent = '';
+
+            if (!oldPassword || !newPassword || !confirmPassword) {
+                errorDiv.textContent = 'Please fill all fields';
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = 'New passwords do not match';
+                return;
+            }
+            if (newPassword.length < 6) {
+                errorDiv.textContent = 'New password must be at least 6 characters';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Password change failed';
+                    return;
+                }
+
+                errorDiv.style.color = '#a3be8c';
+                errorDiv.textContent = 'Password changed successfully!';
+                document.getElementById('oldPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmPassword').value = '';
+                setTimeout(() => { closeAccountModal(); }, 1500);
+            } catch (e) {
+                errorDiv.textContent = 'Network error: ' + e.message;
+            }
+        }
+
+        async function handleDeleteAccount() {
+            const password = document.getElementById('deletePassword').value;
+            const errorDiv = document.getElementById('deleteError');
+            errorDiv.textContent = '';
+
+            if (!password) {
+                errorDiv.textContent = 'Please enter your password';
+                return;
+            }
+
+            if (!confirm('Are you sure? This cannot be undone. All your data will be permanently deleted.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/delete-account', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Account deletion failed';
+                    return;
+                }
+
+                currentUser = null;
+                currentMode = 'guest';
+                commandHistory = [];
+                fs = new VirtualFS();
+                env = new Environment();
+                updateAuthUI();
+                closeAccountModal();
+                outputDiv.innerHTML = '';
+                appendOutput('Account deleted. Starting as guest.');
+                updatePrompt();
+                updateHistorySidebar();
+            } catch (e) {
+                errorDiv.textContent = 'Network error: ' + e.message;
+            }
+        }
+
+        async function loadUserSession() {
+            if (currentMode !== 'registered') return;
+
+            try {
+                const response = await fetch('/api/session/load');
+                const data = await response.json();
+
+                if (data.data) {
+                    const sessionData = data.data;
+                    if (sessionData.terminal_state) {
+                        fs.cwd = sessionData.terminal_state.cwd || '/home/user';
+                        fs.previousCwd = sessionData.terminal_state.previousCwd || fs.cwd;
+                    }
+                    if (sessionData.command_history) {
+                        commandHistory = sessionData.command_history;
+                    }
+                    if (sessionData.file_system) {
+                        fs.root = sessionData.file_system;
+                    }
+                    if (sessionData.environment_vars) {
+                        env.vars = sessionData.environment_vars;
+                    }
+                }
+            } catch (e) {
+                console.error('Load session failed:', e);
+            }
+
+            updatePrompt();
+            updateHistorySidebar();
+        }
+
+        async function saveUserSession() {
+            if (currentMode !== 'registered') return;
+
+            try {
+                await fetch('/api/session/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        terminal_state: { cwd: fs.cwd, previousCwd: fs.previousCwd },
+                        command_history: commandHistory,
+                        file_system: fs.root,
+                        environment_vars: env.vars
+                    })
+                });
+            } catch (e) {
+                console.error('Save session failed:', e);
+            }
+        }
+
+        function updateAuthUI() {
+            const authBtn = document.getElementById('authBtn');
+            const accountBtn = document.getElementById('accountBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const userDisplay = document.getElementById('userDisplay');
+            const modeDisplay = document.getElementById('modeDisplay');
+
+            if (currentMode === 'registered' && currentUser) {
+                authBtn.style.display = 'none';
+                accountBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'inline-block';
+                userDisplay.textContent = currentUser;
+                modeDisplay.textContent = '(registered user)';
+                modeDisplay.style.color = '#81a1c1';
+                env.set('USER', currentUser);
+            } else {
+                authBtn.style.display = 'inline-block';
+                accountBtn.style.display = 'none';
+                logoutBtn.style.display = 'none';
+                userDisplay.textContent = 'Guest';
+                modeDisplay.textContent = '(guest mode - non-persistent)';
+                modeDisplay.style.color = '#a3be8c';
+                env.set('USER', 'guest');
+            }
+            updatePrompt();
+        }
+
+        // ===================== MODAL FUNCTIONS =====================
+        function showAuthModal() {
+            document.getElementById('authModal').classList.add('active');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('authModal').classList.remove('active');
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('regUsername').value = '';
+            document.getElementById('regPassword').value = '';
+            document.getElementById('regConfirm').value = '';
+            document.getElementById('authError').textContent = '';
+            document.getElementById('authError2').textContent = '';
+        }
+
+        function switchToRegister() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'block';
+            document.getElementById('authTitle').textContent = 'Register';
+        }
+
+        function switchToLogin() {
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('authTitle').textContent = 'Login';
+        }
+
+        function showAccountModal() {
+            document.getElementById('accountModal').classList.add('active');
+            document.getElementById('oldPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('deletePassword').value = '';
+            document.getElementById('passError').textContent = '';
+            document.getElementById('deleteError').textContent = '';
+        }
+
+        function closeAccountModal() {
+            document.getElementById('accountModal').classList.remove('active');
+        }
+
         // ===================== VIRTUAL FILE SYSTEM =====================
         class VirtualFS {
+            constructor(root = null) {
+                this.root = root || this._defaultRoot();
+                this.cwd = '/home/user';
+                this.home = '/home/user';
+                this.previousCwd = this.cwd;
+            }
+
+            _defaultRoot() {
+                return {
+                    type: 'dir',
+                    children: {
+                        'bin': {type: 'dir', children: {}},
+                        'etc': {
+                            type: 'dir', children: {
+                                'hostname': {type: 'file', content: 'linux-emulator\n'},
+                                'passwd': {type: 'file', content: 'root:x:0:0:root:/root:/bin/bash\nuser:x:1000:1000:User:/home/user:/bin/bash\n'}
+                            }
+                        },
+                        'home': {
+                            type: 'dir', children: {
+                                'user': {
+                                    type: 'dir', children: {
+                                        '.bashrc': {type: 'file', content: '# bashrc\n'},
+                                        '.profile': {type: 'file', content: '# profile\n'},
+                                        'Documents': {type: 'dir', children: {}},
+                                        'Downloads': {type: 'dir', children: {}},
+                                        'hello.txt': {type: 'file', content: 'Hello, world!\n'}
+                                    }
+                                }
+                            }
+                        },
+                        'tmp': {type: 'dir', children: {}},
+                        'usr': {
+                            type: 'dir', children: {
+                                'bin': {type: 'dir', children: {}},
+                                'lib': {type: 'dir', children: {}}
+                            }
+                        },
+                        'var': {
+                            type: 'dir', children: {
+                                'log': {type: 'dir', children: {}}
+                            }
+                        },
+                        'root': {type: 'dir', children: {}}
+                    }
+                };
+            }
+
+            _resolvePath(pathStr) {
+                if (pathStr.startsWith('~')) pathStr = this.home + pathStr.slice(1);
+                let parts;
+                if (pathStr.startsWith('/')) parts = pathStr.split('/').filter(p => p.length);
+                else {
+                    parts = this.cwd.split('/').filter(p => p.length);
+                    parts = parts.concat(pathStr.split('/').filter(p => p.length));
+                }
+                const stack = [];
+                for (const part of parts) {
+                    if (part === '.' || part === '') continue;
+                    if (part === '..') {if (stack.length) stack.pop();}
+                    else stack.push(part);
+                }
+                return '/' + stack.join('/');
+            }
+
+            _getNode(path) {
+                if (path === '/') return this.root;
+                const parts = path.split('/').slice(1);
+                let current = this.root;
+                for (const part of parts) {
+                    if (current.type !== 'dir' || !current.children[part]) return null;
+                    current = current.children[part];
+                }
+                return current;
+            }
+
+            exists(path) {return this._getNode(this._resolvePath(path)) !== null;}
+            isDir(path) {const node = this._getNode(this._resolvePath(path)); return node && node.type === 'dir';}
+            listDir(path) {
+                const dir = this._getNode(this._resolvePath(path));
+                if (!dir || dir.type !== 'dir') return null;
+                return Object.keys(dir.children).map(name => ({name, type: dir.children[name].type}));
+            }
+            readFile(path) {
+                const node = this._getNode(this._resolvePath(path));
+                if (!node || node.type !== 'file') return null;
+                return node.content || '';
+            }
+            writeFile(path, content) {
+                const absPath = this._resolvePath(path);
+                const dirPath = absPath.substring(0, absPath.lastIndexOf('/')) || '/';
+                const fileName = absPath.substring(absPath.lastIndexOf('/') + 1);
+                const dir = this._getNode(dirPath);
+                if (!dir || dir.type !== 'dir' || !fileName) return false;
+                if (dir.children[fileName] && dir.children[fileName].type === 'dir') return false;
+                dir.children[fileName] = {type: 'file', content};
+                return true;
+            }
+            mkdir(path) {
+                const absPath = this._resolvePath(path);
+                const parts = absPath.split('/').filter(p => p);
+                let current = this.root;
+                for (const part of parts) {
+                    if (!current.children) return false;
+                    if (!current.children[part]) current.children[part] = {type: 'dir', children: {}};
+                    else if (current.children[part].type !== 'dir') return false;
+                    current = current.children[part];
+                }
+                return true;
+            }
+            touch(path) {return this.writeFile(path, '');}
+            rm(path, recursive = false) {
+                const absPath = this._resolvePath(path);
+                if (absPath === '/' || absPath === this.home) return false;
+                const parentPath = absPath.substring(0, absPath.lastIndexOf('/')) || '/';
+                const name = absPath.substring(absPath.lastIndexOf('/') + 1);
+                const parent = this._getNode(parentPath);
+                if (!parent || !parent.children[name]) return false;
+                if (parent.children[name].type === 'dir' && !recursive) return false;
+                delete parent.children[name];
+                return true;
+            }
+        }
+
+        // ===================== ENVIRONMENT =====================
+        class Environment {
+            constructor() {
+                this.vars = {
+                    HOME: '/home/user', USER: 'user', HOSTNAME: 'linux-emulator',
+                    PATH: '/usr/local/bin:/usr/bin:/bin', SHELL: '/bin/bash', PWD: '/home/user'
+                };
+            }
+            set(key, value) {this.vars[key] = value;}
+            unset(key) {delete this.vars[key];}
+            get(key) {return this.vars[key] || '';}
+            updatePwd(pwd) {this.set('PWD', pwd);}
+        }
+
+        // ===================== COMMAND EXECUTION =====================
+        function parseArgs(str) {
+            const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
+            const args = [];
+            let match;
+            while ((match = regex.exec(str)) !== null) {
+                args.push(match[1] ?? match[2] ?? match[0]);
+            }
+            return args;
+        }
+
+        function executeCommand(line, fs, env) {
+            const trimmed = line.trim();
+            if (!trimmed) return '';
+
+            let redirFile = null;
+            let commandPart = trimmed;
+            const gt = trimmed.lastIndexOf('>');
+            if (gt !== -1) {
+                commandPart = trimmed.substring(0, gt).trim();
+                redirFile = trimmed.substring(gt + 1).trim();
+            }
+
+            const args = parseArgs(commandPart);
+            if (!args.length) return '';
+
+            let output;
+            try {
+                switch (args[0]) {
+                    case 'ls': output = ls(args.slice(1), fs); break;
+                    case 'cd': output = cd(args.slice(1), fs, env); break;
+                    case 'pwd': output = fs.cwd; break;
+                    case 'mkdir': output = mkdirCmd(args.slice(1), fs); break;
+                    case 'touch': output = touchCmd(args.slice(1), fs); break;
+                    case 'rm': output = rmCmd(args.slice(1), fs); break;
+                    case 'cat': output = catCmd(args.slice(1), fs); break;
+                    case 'echo': output = echoCmd(args.slice(1), env); break;
+                    case 'clear': output = '__CLEAR__'; break;
+                    case 'date': output = new Date().toString(); break;
+                    case 'whoami': output = env.get('USER'); break;
+                    case 'hostname': output = env.get('HOSTNAME'); break;
+                    case 'uptime': output = uptimeCmd(); break;
+                    case 'history': output = historyCmd(); break;
+                    case 'help': output = helpCmd(); break;
+                    case 'export': output = exportCmd(args.slice(1), env); break;
+                    case 'unset': output = unsetCmd(args.slice(1), env); break;
+                    case 'env': output = envCmd(env); break;
+                    case 'grep': output = grepCmd(args.slice(1), fs); break;
+                    case 'sudo': output = 'Nice try.'; break;
+                    default: output = `${args[0]}: command not found`;
+                }
+            } catch (e) {
+                output = `Error: ${e.message}`;
+            }
+
+            if (redirFile && output !== '__CLEAR__') {
+                const success = fs.writeFile(redirFile, output + '\n');
+                if (!success) output = `Error writing to '${redirFile}'`;
+                else output = '';
+            }
+
+            return output;
+        }
+
+        function resolveDir(args, fs) {
+            const dir = args.find(a => !a.startsWith('-')) || '.';
+            return fs._resolvePath(dir);
+        }
+
+        function ls(args, fs) {
+            const flags = args.filter(a => a.startsWith('-')).join('');
+            const showAll = flags.includes('a'), long = flags.includes('l');
+            const dirPath = resolveDir(args, fs) || fs.cwd;
+            if (!fs.isDir(dirPath)) return `ls: cannot access '${dirPath}': Not a directory`;
+            const list = fs.listDir(dirPath);
+            if (!list) return '';
+            const filtered = showAll ? list : list.filter(f => !f.name.startsWith('.'));
+            filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+            if (long) {
+                return filtered.map(f => {
+                    const type = f.type === 'dir' ? 'd' : '-';
+                    const perms = f.type === 'dir' ? 'rwxr-xr-x' : 'rw-r--r--';
+                    const filePath = (dirPath === '/' ? '' : dirPath) + '/' + f.name;
+                    const size = f.type === 'dir' ? 4096 : (fs.readFile(filePath)?.length || 0);
+                    const dateStr = new Date().toLocaleString('en-US', {month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'});
+                    return `${type}${perms} 1 user user ${String(size).padStart(5)} ${dateStr} ${f.name}${f.type === 'dir' ? '/' : ''}`;
+                }).join('\n');
+            }
+            return filtered.map(f => f.name + (f.type === 'dir' ? '/' : '')).join('  ');
+        }
+
+        function cd(args, fs, env) {
+            let target;
+            if (args.length === 0 || args[0] === '~') target = fs.home;
+            else if (args[0] === '-') target = fs.previousCwd || fs.home;
+            else target = fs._resolvePath(args[0]);
+            if (!fs.isDir(target)) return `cd: ${args[0]}: No such directory`;
+            fs.previousCwd = fs.cwd;
+            fs.cwd = target;
+            env.updatePwd(target);
+            return '';
+        }
+
+        function mkdirCmd(args, fs) {
+            if (!args.length) return 'mkdir: missing operand';
+            let out = '';
+            for (const d of args) if (!fs.mkdir(d)) out += `mkdir: cannot create directory '${d}'\n`;
+            return out.trimEnd();
+        }
+        function touchCmd(args, fs) {
+            if (!args.length) return 'touch: missing file operand';
+            args.forEach(f => fs.touch(f));
+            return '';
+        }
+        function rmCmd(args, fs) {
+            const recursive = args.includes('-r') || args.includes('-rf');
+            const files = args.filter(a => a !== '-r' && a !== '-rf');
+            if (!files.length) return 'rm: missing operand';
+            for (const f of files) if (!fs.rm(f, recursive)) return `rm: cannot remove '${f}'`;
+            return '';
+        }
+        function catCmd(args, fs) {
+            if (!args.length) return 'cat: missing file operand';
+            let out = '';
+            for (const f of args) {
+                const content = fs.readFile(f);
+                if (content === null) out += `cat: ${f}: No such file or directory\n`;
+                else out += content;
+            }
+            return out;
+        }
+        function echoCmd(args, env) {
+            return args.join(' ').replace(/\$(\w+)/g, (_, v) => env.get(v) || '');
+        }
+        function uptimeCmd() {
+            const s = Math.floor((Date.now() - bootTime) / 1000);
+            const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+            return `up ${d} day${d !== 1 ? 's' : ''}, ${h}:${String(m).padStart(2, '0')}, 1 user, load average: 0.00 0.00 0.00`;
+        }
+        function historyCmd() {
+            return commandHistory.map((c, i) => `  ${i + 1}  ${c}`).join('\n');
+        }
+        function helpCmd() {
+            return `Available commands: ls, cd, pwd, mkdir, touch, rm, cat, echo, clear, date,
+whoami, hostname, uptime, history, help, export, unset, env, grep, sudo
+Use > to redirect output.`;
+        }
+        function exportCmd(args, env) {
+            const joined = args.join(' '), eq = joined.indexOf('=');
+            if (eq === -1) return 'export: usage: VAR=value';
+            env.set(joined.substring(0, eq).trim(), joined.substring(eq + 1).trim().replace(/^["']|["']$/g, ''));
+            return '';
+        }
+        function unsetCmd(args, env) {args.forEach(a => env.unset(a)); return '';}
+        function envCmd(env) {return Object.entries(env.vars).map(([k, v]) => `${k}=${v}`).join('\n');}
+        function grepCmd(args, fs) {
+            if (args.length < 2) return 'grep: missing pattern or file';
+            const pattern = args[0];
+            let out = '';
+            for (const f of args.slice(1)) {
+                const content = fs.readFile(f);
+                if (content === null) out += `grep: ${f}: No such file or directory\n`;
+                else content.split('\n').forEach(line => {if (line.includes(pattern)) out += (args.length > 2 ? f + ':' : '') + line + '\n';});
+            }
+            return out;
+        }
+
+        // ===================== UI LOGIC =====================
+        const outputDiv = document.getElementById('output');
+        const cmdInput = document.getElementById('cmdInput');
+        const promptSpan = document.getElementById('promptSpan');
+        const historyListDiv = document.getElementById('historyList');
+        const submitBtn = document.getElementById('submitBtn');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+        function updatePrompt() {
+            let pathDisplay = fs.cwd;
+            if (pathDisplay.startsWith(fs.home)) {
+                pathDisplay = '~' + pathDisplay.slice(fs.home.length);
+            }
+            promptSpan.textContent = `${env.get('USER')}@${env.get('HOSTNAME')}:${pathDisplay}$`;
+        }
+
+        function appendOutput(text, isCommand = false) {
+            const div = document.createElement('div');
+            if (text === '__CLEAR__') {
+                outputDiv.innerHTML = '';
+                return;
+            }
+            if (isCommand) {
+                div.innerHTML = `<span class="prompt">${promptSpan.textContent}</span> <span class="cmd">${escapeHtml(text)}</span>`;
+            } else {
+                div.textContent = text;
+                if (text.includes('Error') || text.includes('not found')) {
+                    div.className = 'error';
+                }
+            }
+            outputDiv.appendChild(div);
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function updateHistorySidebar() {
+            historyListDiv.innerHTML = '';
+            const recent = commandHistory.slice(-50).reverse();
+            for (const cmd of recent) {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.textContent = cmd;
+                item.addEventListener('click', () => {
+                    cmdInput.value = cmd;
+                    cmdInput.focus();
+                });
+                historyListDiv.appendChild(item);
+            }
+        }
+
+        function executeAndShow(cmd) {
+            if (cmd.trim()) {
+                commandHistory.push(cmd);
+                if (commandHistory.length > 200) commandHistory.shift();
+            }
+            appendOutput(cmd, true);
+            const result = executeCommand(cmd, fs, env);
+            if (result) {
+                appendOutput(result);
+            }
+            if (currentMode === 'registered') {
+                saveUserSession();
+            }
+            updatePrompt();
+            updateHistorySidebar();
+        }
+
+        // Event listeners
+        submitBtn.addEventListener('click', () => {
+            const cmd = cmdInput.value.trim();
+            if (cmd) {
+                executeAndShow(cmd);
+                cmdInput.value = '';
+                cmdInput.focus();
+            }
+        });
+
+        cmdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitBtn.click();
+            }
+        });
+
+        clearHistoryBtn.addEventListener('click', () => {
+            if (confirm('Clear all command history?')) {
+                commandHistory = [];
+                if (currentMode === 'registered') {
+                    saveUserSession();
+                }
+                updateHistorySidebar();
+            }
+        });
+
+        // Save session on page leave
+        window.addEventListener('beforeunload', async () => {
+            if (currentMode === 'registered') {
+                await saveUserSession();
+            }
+        });
+
+        // Initial setup
+        async function initializeApp() {
+            await checkAuthStatus();
+            updatePrompt();
+            updateHistorySidebar();
+            appendOutput('Welcome to Linux Terminal Simulator');
+            appendOutput(currentMode === 'registered' ? 
+                `Welcome back, ${currentUser}! Your session has been restored.` :
+                "Type 'help' for available commands. (Guest mode - session not saved)");
+        }
+
+        initializeApp();
+    </script>
+</body>
+
+</html>
             constructor(root = null) {
                 this.root = root || this._defaultRoot();
                 this.cwd = '/home/user';
@@ -505,26 +1534,14 @@ Use > to redirect output.`;
         const submitBtn = document.getElementById('submitBtn');
         const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 
-        // Load state from localStorage
+        // State functions disabled - non-persistent session
         function loadState() {
-            const saved = localStorage.getItem('terminalState');
-            if (saved) {
-                try {
-                    const s = JSON.parse(saved);
-                    fs.root = s.root; fs.cwd = s.cwd || '/home/user';
-                    fs.previousCwd = s.previousCwd || fs.home;
-                    env.vars = s.envVars || env.vars;
-                    commandHistory = s.history || [];
-                } catch (e) { }
-            }
+            // Fresh session on each visit - no persistence
             env.updatePwd(fs.cwd);
         }
 
         function saveState() {
-            localStorage.setItem('terminalState', JSON.stringify({
-                root: fs.root, cwd: fs.cwd, previousCwd: fs.previousCwd,
-                envVars: env.vars, history: commandHistory
-            }));
+            // No persistence - session is temporary only
         }
 
         function updatePrompt() {
@@ -584,7 +1601,7 @@ Use > to redirect output.`;
             if (result) {
                 appendOutput(result);
             }
-            saveState();
+            // No persistence - session is temporary
             updatePrompt();
             updateHistorySidebar();
         }
@@ -608,7 +1625,7 @@ Use > to redirect output.`;
         clearHistoryBtn.addEventListener('click', () => {
             if (confirm('Clear all command history?')) {
                 commandHistory = [];
-                saveState();
+                // No persistence - session is temporary
                 updateHistorySidebar();
             }
         });
